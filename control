@@ -1,0 +1,12 @@
+Package: cfd.legacyreborn.gcpassesfix
+Name: GCPassesFix
+Version: 1.0.0
+Architecture: iphoneos-arm
+Description: Fixes Game Center sign-in and the Passbook (Passes) app on jailbroken legacy iOS. Bundles up-to-date root certificates, resets the stale Game Center / iTunes Store / Setup state (reversibly) so the device signs in clean, and patches PassKit to accept unsigned, edited or expired passes. Methods from the bag.xml guides; Passbook fix based on SigPass (GPLv3).
+Maintainer: LegacyReborn
+Author: LegacyReborn
+Section: Tweaks
+Depends: mobilesubstrate (>= 0.9.5000), preferenceloader, firmware (>= 5.0), firmware (<< 8.0)
+Conflicts: bag.xml.sigpass
+Replaces: bag.xml.sigpass
+Icon: file:///Library/PreferenceBundles/GCPassesFixPrefs.bundle/icon@2x.png

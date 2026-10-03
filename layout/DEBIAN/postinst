@@ -1,0 +1,18 @@
+#!/bin/bash
+# Make sure the setuid launcher keeps its bit (archive transfers sometimes drop
+# it), then nudge Preferences/SpringBoard to pick up the new bundle and tweak.
+set -e
+
+if [ -f /usr/libexec/gcpassesfix-run ]; then
+	chown root:wheel /usr/libexec/gcpassesfix-run || true
+	chmod 4755 /usr/libexec/gcpassesfix-run || true
+fi
+chmod 755 /usr/bin/gcpassesfix 2>/dev/null || true
+
+echo "GCPassesFix installed."
+echo "Settings -> GCPassesFix: install the root certificates, then Reset and reboot."
+echo "Passbook is fixed automatically; respring or reboot to load it."
+
+killall -9 Preferences 2>/dev/null || true
+
+exit 0

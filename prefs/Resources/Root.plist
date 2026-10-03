@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>title</key>
+	<string>GCPassesFix</string>
+	<key>items</key>
+	<array>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>footerText</key>
+			<string>Fixes Game Center sign-in and Passbook on legacy iOS. Passes are fixed automatically by the tweak. Game Center is fixed in two steps below: install the root certificates, then reset and reboot.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Step 1 — Certificates</string>
+			<key>footerText</key>
+			<string>Stages an up-to-date root-certificate profile and tells you how to install it. Needed so Game Center and the stores can reach Apple's servers over TLS.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>Install Root Certificates</string>
+			<key>action</key>
+			<string>installCerts</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Step 2 — Reset Game Center</string>
+			<key>footerText</key>
+			<string>Backs up and clears stale Game Center, iTunes Store and Setup state, then you reboot into Setup to sign in clean. Your passes, apps and files are not touched. Reversible with Restore.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>Reset Sign-in State</string>
+			<key>action</key>
+			<string>resetGameCenter</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>Reboot</string>
+			<key>action</key>
+			<string>reboot</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Undo</string>
+			<key>footerText</key>
+			<string>Restore puts the most recent backup back. Reboot afterwards.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>Restore Last Backup</string>
+			<key>action</key>
+			<string>restoreGameCenter</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>Show Status</string>
+			<key>action</key>
+			<string>showStatus</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>footerText</key>
+			<string>GCPassesFix by LegacyReborn. Game Center method from the bag.xml guide (fifiisawesum). Passbook fix based on SigPass by bag.xml and ObscureMosquito (GPLv3).</string>
+		</dict>
+	</array>
+</dict>
+</plist>

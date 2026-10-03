@@ -1,0 +1,211 @@
+#!/bin/bash
+# GCPassesFix - Game Center and Passes fix for legacy iOS (LegacyReborn).
+#
+# Game Center on old iOS stops signing in once Apple rotates TLS roots and
+# leaves stale sign-in state behind. The fix from the bag.xml guide
+# (developer.bag-xml.com/guides/gamecenter, by fifiisawesum) is two parts:
+#   1. install up-to-date root certificates;
+#   2. clear the stale Game Center / iTunes Store / setup state so the device
+#      boots back into Setup and signs in clean.
+# This tool does part 2 safely (everything it removes is copied to a backup
+# first and can be restored) and stages the certificate profile for part 1.
+#
+# Passes (Passbook) is fixed separately by the GCPassesFix MobileSubstrate
+# tweak; this tool does not touch it.
+
+set -u
+
+SHARE=/usr/share/gcpassesfix
+PROFILE="$SHARE/GCPassesFix-Roots.mobileconfig"
+BACKUP_ROOT=/var/mobile/Library/GCPassesFix/backups
+STAGE=/var/mobile/Documents/GCPassesFix-Roots.mobileconfig
+
+# Home of the user whose state we reset. Overridable for odd setups.
+MOBILE="${GCPF_MOBILE:-/var/mobile}"
+
+# Preference files in <mobile>/Library/Preferences to clear.
+PREFS=(
+	com.apple.gamed.plist
+	com.apple.gamecenter.plist
+	com.apple.itunesstored.plist
+	com.apple.storeuiservice.plist
+	com.apple.purplebuddy.plist
+	com.apple.assistant.plist
+	com.apple.geo.plist
+)
+
+# Cache folders/files in <mobile>/Library/Caches to clear.
+CACHES=(
+	AppStore
+	AssistantServices
+	aosnotifyd
+	assetsd
+	dataaccess
+	GameCenter
+	GamecenteruiService
+	GEOservices
+	StoreKitUIService
+	iTunesStore
+	itunesstored
+	Preferences
+	PurpleBuddy
+	GameKit
+	com.apple.gamed
+)
+
+red()   { printf '\033[31m%s\033[0m\n' "$*"; }
+green() { printf '\033[32m%s\033[0m\n' "$*"; }
+bold()  { printf '\033[1m%s\033[0m\n' "$*"; }
+
+need_root() {
+	if [ "$(id -u)" != "0" ]; then
+		red "Run as root (su / sudo)."
+		exit 1
+	fi
+}
+
+cert_count() {
+	ls "$SHARE/certs"/*.cer 2>/dev/null | wc -l | tr -d ' '
+}
+
+cmd_status() {
+	bold "GCPassesFix status"
+	echo "Bundled certificates : $(cert_count)"
+	if [ -f "$PROFILE" ]; then
+		echo "Certificate profile  : $PROFILE"
+	else
+		red  "Certificate profile  : missing"
+	fi
+	echo
+	echo "Stale sign-in state under $MOBILE:"
+	local found=0 p
+	for p in "${PREFS[@]}"; do
+		[ -e "$MOBILE/Library/Preferences/$p" ] && { echo "  pref  $p"; found=1; }
+	done
+	for p in "${CACHES[@]}"; do
+		[ -e "$MOBILE/Library/Caches/$p" ] && { echo "  cache $p"; found=1; }
+	done
+	[ "$found" = 0 ] && green "  none left - a reboot will drop into Setup"
+	echo
+	if [ -d "$BACKUP_ROOT" ] && ls "$BACKUP_ROOT" >/dev/null 2>&1; then
+		echo "Backups ($BACKUP_ROOT):"
+		ls -1 "$BACKUP_ROOT" | sed 's/^/  /'
+	else
+		echo "Backups: none"
+	fi
+}
+
+cmd_certs() {
+	need_root
+	if [ ! -f "$PROFILE" ]; then
+		red "Certificate profile is missing: $PROFILE"
+		exit 1
+	fi
+	mkdir -p "$(dirname "$STAGE")"
+	cp "$PROFILE" "$STAGE"
+	chown mobile:mobile "$STAGE" 2>/dev/null
+	green "Certificate profile copied to:"
+	echo "  $STAGE"
+	echo
+	echo "Install it on the device, either way:"
+	echo "  * open $STAGE in Filza and tap Install, or"
+	echo "  * mail/AirDrop the file to yourself and tap it,"
+	echo "then accept the profile in Settings (it shows as Not Verified,"
+	echo "like every community legacy-iOS certificate bundle)."
+	echo
+	echo "The same certificates are kept as .cer files in $SHARE/certs."
+}
+
+cmd_reset() {
+	need_root
+	local stamp backup n=0 p
+	stamp=$(date '+%Y%m%d-%H%M%S')
+	backup="$BACKUP_ROOT/$stamp"
+	mkdir -p "$backup/Preferences" "$backup/Caches"
+
+	bold "Backing up and clearing Game Center / Store / Setup state"
+	for p in "${PREFS[@]}"; do
+		local src="$MOBILE/Library/Preferences/$p"
+		if [ -e "$src" ]; then
+			cp -a "$src" "$backup/Preferences/" && rm -rf "$src" && { echo "  pref  $p"; n=$((n+1)); }
+		fi
+	done
+	for p in "${CACHES[@]}"; do
+		local src="$MOBILE/Library/Caches/$p"
+		if [ -e "$src" ]; then
+			cp -a "$src" "$backup/Caches/" && rm -rf "$src" && { echo "  cache $p"; n=$((n+1)); }
+		fi
+	done
+
+	if [ "$n" = 0 ]; then
+		rmdir "$backup/Preferences" "$backup/Caches" "$backup" 2>/dev/null
+		green "Nothing left to clear - reboot to drop into Setup."
+		return 0
+	fi
+
+	echo
+	green "Cleared $n item(s). Backup: $backup"
+	echo "Restore with: gcpassesfix restore"
+	echo
+	bold "Now reboot. The device should boot into Setup; sign in with your"
+	bold "Apple ID there (install the root certificates first with 'gcpassesfix certs')."
+}
+
+cmd_restore() {
+	need_root
+	local backup
+	if [ $# -ge 1 ]; then
+		backup="$BACKUP_ROOT/$1"
+	else
+		backup=$(ls -1d "$BACKUP_ROOT"/*/ 2>/dev/null | sort | tail -1)
+		backup="${backup%/}"
+	fi
+	if [ -z "$backup" ] || [ ! -d "$backup" ]; then
+		red "No backup to restore."
+		echo "Available:"; ls -1 "$BACKUP_ROOT" 2>/dev/null | sed 's/^/  /'
+		exit 1
+	fi
+
+	bold "Restoring from $backup"
+	local f base
+	for f in "$backup/Preferences"/*; do
+		[ -e "$f" ] || continue
+		base=$(basename "$f")
+		rm -rf "$MOBILE/Library/Preferences/$base"
+		cp -a "$f" "$MOBILE/Library/Preferences/" && echo "  pref  $base"
+	done
+	for f in "$backup/Caches"/*; do
+		[ -e "$f" ] || continue
+		base=$(basename "$f")
+		rm -rf "$MOBILE/Library/Caches/$base"
+		cp -a "$f" "$MOBILE/Library/Caches/" && echo "  cache $base"
+	done
+	green "Restored. Reboot for it to take effect."
+}
+
+usage() {
+	cat <<EOF
+GCPassesFix - Game Center and Passes fix for legacy iOS (LegacyReborn)
+
+Usage: gcpassesfix <command>
+
+  status            Show certificates, leftover sign-in state and backups
+  certs             Stage the root-certificate profile for installation
+  reset             Back up and clear Game Center / Store / Setup state,
+                    so the next reboot drops into Setup for a clean sign-in
+  restore [NAME]    Restore the most recent (or named) backup
+  help              This text
+
+Passes (Passbook) is fixed by the GCPassesFix tweak and needs no command.
+EOF
+}
+
+case "${1:-help}" in
+	status)  cmd_status ;;
+	certs)   cmd_certs ;;
+	reset)   cmd_reset ;;
+	restore) shift; cmd_restore "$@" ;;
+	reboot)  need_root; sync; /sbin/reboot || reboot ;;
+	help|-h|--help) usage ;;
+	*) usage; exit 1 ;;
+esac
